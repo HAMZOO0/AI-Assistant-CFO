@@ -314,228 +314,129 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Generate forecasts
   const generateForecasts = async () => {
-    if (!state.financialData) return;
-    
+    // Require real data; do not generate anything without it
+    if (!state.financialData) {
+      dispatch({ type: 'SET_FORECASTS', payload: [] });
+      return;
+    }
+
     try {
-      const forecastResponse = await aiService.generateForecast(state.financialData);
-      const aiForecasts = forecastResponse.data.forecasts || [];
-      
-      if (aiForecasts.length > 0) {
-        dispatch({ type: 'SET_FORECASTS', payload: aiForecasts });
-        toast.success('Forecasts generated successfully!');
-      } else {
-        // Generate fallback forecasts
-        const fallbackForecasts: Forecast[] = [
-          {
-            period: 'Q1 2024',
-            revenue: state.financialData.revenue?.current * 1.1 || 1100000,
-            expenses: state.financialData.expenses?.current * 1.05 || 800000,
-            cashFlow: state.financialData.cashFlow?.current * 1.15 || 300000,
-            confidence: 85
-          },
-          {
-            period: 'Q2 2024',
-            revenue: state.financialData.revenue?.current * 1.15 || 1150000,
-            expenses: state.financialData.expenses?.current * 1.08 || 840000,
-            cashFlow: state.financialData.cashFlow?.current * 1.2 || 310000,
-            confidence: 78
-          }
-        ];
-        dispatch({ type: 'SET_FORECASTS', payload: fallbackForecasts });
-        toast.success('Forecasts generated successfully!');
-      }
+      // Call backend AI endpoint with historical data
+      const resp = await aiService.generateForecast(state.financialData, 90);
+      const payload = (resp && (resp as any).data !== undefined) ? (resp as any).data : resp;
+      const server = payload && payload.data ? payload.data : payload; // backend returns { success, data }
+
+      // Expect server.forecast array; map into our Forecast[]
+      const serverForecast = server && server.forecast ? server.forecast : [];
+      const aiForecasts: Forecast[] = serverForecast.slice(0, 6).map((f: any) => ({
+        period: f.date || f.period || 'N/A',
+        revenue: typeof f.revenue === 'number' ? f.revenue : state.financialData.revenue?.current || 0,
+        expenses: typeof f.expenses === 'number' ? f.expenses : state.financialData.expenses?.current || 0,
+        cashFlow: typeof f.predictedCashFlow === 'number' ? f.predictedCashFlow : (state.financialData.cashFlow?.current || 0),
+        confidence: Math.round(((f.confidence || 0.75) * 100))
+      }));
+
+      dispatch({ type: 'SET_FORECASTS', payload: aiForecasts });
+      toast.success('Forecasts generated successfully!');
     } catch (error) {
       console.error('Error generating forecasts:', error);
-      // Generate fallback forecasts on error
-      const fallbackForecasts: Forecast[] = [
-        {
-          period: 'Q1 2024',
-          revenue: 1100000,
-          expenses: 800000,
-          cashFlow: 300000,
-          confidence: 85
-        },
-        {
-          period: 'Q2 2024',
-          revenue: 1150000,
-          expenses: 840000,
-          cashFlow: 310000,
-          confidence: 78
-        }
-      ];
-      dispatch({ type: 'SET_FORECASTS', payload: fallbackForecasts });
-      toast.success('Forecasts generated successfully!');
+      // Do not fallback to hardcoded values; leave forecasts empty
+      dispatch({ type: 'SET_FORECASTS', payload: [] });
+      toast.error('Failed to generate forecasts');
     }
   };
 
   // Generate scenarios
   const generateScenarios = async () => {
-    if (!state.financialData) return;
-    
+    if (!state.financialData) {
+      dispatch({ type: 'SET_SCENARIOS', payload: [] });
+      return;
+    }
+
     try {
-      const scenarioResponse = await aiService.generateScenario(state.financialData);
-      const aiScenarios = scenarioResponse.data.scenarios || [];
-      
-      if (aiScenarios.length > 0) {
-        dispatch({ type: 'SET_SCENARIOS', payload: aiScenarios });
-        toast.success('Scenarios generated successfully!');
-      } else {
-        // Generate fallback scenarios
-        const fallbackScenarios: Scenario[] = [
-          {
-            id: '1',
-            name: 'Optimistic Growth',
-            description: 'High growth scenario with increased market demand',
-            assumptions: {
-              marketGrowth: 'High',
-              competition: 'Low',
-              economicConditions: 'Favorable'
-            },
-            results: {
-              period: 'Q1 2024',
-              revenue: state.financialData.revenue?.current * 1.25 || 1250000,
-              expenses: state.financialData.expenses?.current * 0.9 || 720000,
-              cashFlow: state.financialData.cashFlow?.current * 1.3 || 530000,
-              confidence: 85
-            },
-            createdAt: new Date()
-          },
-          {
-            id: '2',
-            name: 'Conservative Growth',
-            description: 'Moderate growth with controlled expenses',
-            assumptions: {
-              marketGrowth: 'Moderate',
-              competition: 'Medium',
-              economicConditions: 'Stable'
-            },
-            results: {
-              period: 'Q1 2024',
-              revenue: state.financialData.revenue?.current * 1.1 || 1100000,
-              expenses: state.financialData.expenses?.current * 0.95 || 760000,
-              cashFlow: state.financialData.cashFlow?.current * 1.15 || 340000,
-              confidence: 90
-            },
-            createdAt: new Date()
-          }
-        ];
-        dispatch({ type: 'SET_SCENARIOS', payload: fallbackScenarios });
-        toast.success('Scenarios generated successfully!');
-      }
-    } catch (error) {
-      console.error('Error generating scenarios:', error);
-      // Generate fallback scenarios on error
-      const fallbackScenarios: Scenario[] = [
+      // Ask backend to generate two scenario analyses in parallel
+      const [optimisticResp, conservativeResp] = await Promise.all([
+        aiService.generateScenario(state.financialData, 'Optimistic Growth'),
+        aiService.generateScenario(state.financialData, 'Conservative Growth'),
+      ]);
+
+      const optPayload = (optimisticResp && (optimisticResp as any).data !== undefined) ? (optimisticResp as any).data : optimisticResp;
+      const optData = optPayload && optPayload.data ? optPayload.data : optPayload;
+
+      const consPayload = (conservativeResp && (conservativeResp as any).data !== undefined) ? (conservativeResp as any).data : conservativeResp;
+      const consData = consPayload && consPayload.data ? consPayload.data : consPayload;
+
+      const scenarios: Scenario[] = [
         {
-          id: '1',
+          id: 'optimistic',
           name: 'Optimistic Growth',
           description: 'High growth scenario with increased market demand',
-          assumptions: {
-            marketGrowth: 'High',
-            competition: 'Low',
-            economicConditions: 'Favorable'
-          },
+          assumptions: { scenario: 'Optimistic Growth' },
           results: {
-            period: 'Q1 2024',
-            revenue: 1250000,
-            expenses: 720000,
-            cashFlow: 530000,
-            confidence: 85
+            period: 'Next Quarter',
+            revenue: typeof optData?.impact?.revenue === 'number' ? optData.impact.revenue : (state.financialData.revenue?.current || 0),
+            expenses: typeof optData?.impact?.expenses === 'number' ? optData.impact.expenses : (state.financialData.expenses?.current || 0),
+            cashFlow: typeof optData?.impact?.cashFlow === 'number' ? optData.impact.cashFlow : (state.financialData.cashFlow?.current || 0),
+            confidence: Math.round(((optData?.confidence ?? 0.75) * 100)),
           },
-          createdAt: new Date()
+          createdAt: new Date(),
         },
         {
-          id: '2',
+          id: 'conservative',
           name: 'Conservative Growth',
           description: 'Moderate growth with controlled expenses',
-          assumptions: {
-            marketGrowth: 'Moderate',
-            competition: 'Medium',
-            economicConditions: 'Stable'
-          },
+          assumptions: { scenario: 'Conservative Growth' },
           results: {
-            period: 'Q1 2024',
-            revenue: 1100000,
-            expenses: 760000,
-            cashFlow: 340000,
-            confidence: 90
+            period: 'Next Quarter',
+            revenue: typeof consData?.impact?.revenue === 'number' ? consData.impact.revenue : (state.financialData.revenue?.current || 0),
+            expenses: typeof consData?.impact?.expenses === 'number' ? consData.impact.expenses : (state.financialData.expenses?.current || 0),
+            cashFlow: typeof consData?.impact?.cashFlow === 'number' ? consData.impact.cashFlow : (state.financialData.cashFlow?.current || 0),
+            confidence: Math.round(((consData?.confidence ?? 0.8) * 100)),
           },
-          createdAt: new Date()
-        }
+          createdAt: new Date(),
+        },
       ];
-      dispatch({ type: 'SET_SCENARIOS', payload: fallbackScenarios });
+
+      dispatch({ type: 'SET_SCENARIOS', payload: scenarios });
       toast.success('Scenarios generated successfully!');
+    } catch (error) {
+      console.error('Error generating scenarios:', error);
+      // No hardcoded fallbacks; leave empty
+      dispatch({ type: 'SET_SCENARIOS', payload: [] });
+      // Avoid spamming toast: show only once per failure burst
+      if (!(error as any)?._suppressToast) {
+        toast.error('Failed to generate scenarios');
+        (error as any)._suppressToast = true;
+        setTimeout(() => {
+          try { delete (error as any)._suppressToast; } catch {}
+        }, 1500);
+      }
     }
   };
 
   // Generate reports
   const generateReports = async () => {
     try {
-      // First try to fetch existing reports
-      const reportsResponse = await reportsService.getReports();
-      if (reportsResponse.data && reportsResponse.data.length > 0) {
-        dispatch({ type: 'SET_REPORTS', payload: reportsResponse.data });
-        toast.success('Reports loaded successfully!');
-        return;
-      }
-      
-      // If no existing reports, generate new ones
+      // Always generate a fresh report if we have financial data
       if (state.financialData) {
-        const newReportsResponse = await reportsService.getReports();
-        if (newReportsResponse.data) {
-          dispatch({ type: 'SET_REPORTS', payload: newReportsResponse.data });
-          toast.success('Reports generated successfully!');
-        }
-      } else {
-        // Generate fallback reports
-        const fallbackReports: FinancialReport[] = [
-          {
-            id: '1',
-            type: 'monthly',
-            period: 'January 2024',
-            generatedAt: new Date(),
-            summary: 'Monthly financial performance summary',
-            keyInsights: ['Revenue growth of 15%', 'Expense reduction of 8%'],
-            metrics: {
-              revenue: { current: 1000000, previous: 870000, change: 130000, changePercent: 15.0, trend: 'up' },
-              expenses: { current: 800000, previous: 870000, change: -70000, changePercent: -8.0, trend: 'down' },
-              profit: { current: 200000, previous: 0, change: 200000, changePercent: 100.0, trend: 'up' },
-              cashFlow: { current: 150000, previous: 0, change: 150000, changePercent: 100.0, trend: 'up' },
-              arDays: { current: 45, previous: 50, change: -5, changePercent: -10.0, trend: 'down' },
-              apDays: { current: 30, previous: 35, change: -5, changePercent: -14.3, trend: 'down' },
-              ebitda: { current: 250000, previous: 0, change: 250000, changePercent: 100.0, trend: 'up' },
-              margins: { current: 20.0, previous: 0, change: 20.0, changePercent: 100.0, trend: 'up' }
-            }
-          }
-        ];
-        dispatch({ type: 'SET_REPORTS', payload: fallbackReports });
-        toast.success('Reports generated successfully!');
+        await reportsService.generateReport();
+      }
+
+      // Then fetch reports list
+      const reportsResponse = await reportsService.getReports();
+      const reports = (reportsResponse && (reportsResponse as any).data !== undefined)
+        ? (reportsResponse as any).data
+        : reportsResponse;
+
+      dispatch({ type: 'SET_REPORTS', payload: reports || [] });
+      if (reports && reports.length > 0) {
+        toast.success('Reports loaded successfully!');
       }
     } catch (error) {
       console.error('Error generating reports:', error);
-      // Generate fallback reports on error
-      const fallbackReports: FinancialReport[] = [
-        {
-          id: '1',
-          type: 'monthly',
-          period: 'January 2024',
-          generatedAt: new Date(),
-          summary: 'Monthly financial performance summary',
-          keyInsights: ['Revenue growth of 15%', 'Expense reduction of 8%'],
-          metrics: {
-            revenue: { current: 1000000, previous: 870000, change: 130000, changePercent: 15.0, trend: 'up' },
-            expenses: { current: 800000, previous: 870000, change: -70000, changePercent: -8.0, trend: 'down' },
-            profit: { current: 200000, previous: 0, change: 200000, changePercent: 100.0, trend: 'up' },
-            cashFlow: { current: 150000, previous: 0, change: 150000, changePercent: 100.0, trend: 'up' },
-            arDays: { current: 45, previous: 50, change: -5, changePercent: -10.0, trend: 'down' },
-            apDays: { current: 30, previous: 35, change: -5, changePercent: -14.3, trend: 'down' },
-            ebitda: { current: 250000, previous: 0, change: 250000, changePercent: 100.0, trend: 'up' },
-            margins: { current: 20.0, previous: 0, change: 20.0, changePercent: 100.0, trend: 'up' }
-          }
-        }
-      ];
-      dispatch({ type: 'SET_REPORTS', payload: fallbackReports });
-      toast.success('Reports generated successfully!');
+      // No fallbacks – keep it dynamic
+      dispatch({ type: 'SET_REPORTS', payload: [] });
+      toast.error('Failed to load reports');
     }
   };
 

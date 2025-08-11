@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   TrendingUp, 
   AlertTriangle,
@@ -35,15 +35,16 @@ const Forecasting: React.FC = () => {
     }
   }, [loadFinancialData, metrics]);
 
+  const requestedRef = useRef(false);
+
   useEffect(() => {
-    // Generate forecasts and scenarios if we have metrics but no data
-    if (metrics && forecasts.length === 0) {
+    // Generate forecasts and scenarios once when metrics become available
+    if (metrics && !requestedRef.current) {
+      requestedRef.current = true;
       generateForecasts();
-    }
-    if (metrics && scenarios.length === 0) {
       generateScenarios();
     }
-  }, [metrics, forecasts.length, scenarios.length, generateForecasts, generateScenarios]);
+  }, [metrics, generateForecasts, generateScenarios]);
 
   const createNewScenario = () => {
     setShowScenarioModal(true);

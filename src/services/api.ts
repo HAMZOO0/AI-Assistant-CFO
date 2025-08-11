@@ -41,9 +41,13 @@ api.interceptors.response.use(
 // AI Service
 export const aiService = {
   generateInsights: (data: any) => api.post('/ai/insights', data),
-  generateForecast: (data: any) => api.post('/ai/forecast', data),
+  // Send historical data to backend forecast endpoint
+  generateForecast: (historicalData: any, period: number = 90) =>
+    api.post('/ai/forecast-cashflow', { historicalData, period }),
   analyzeReport: (data: any) => api.post('/ai/analyze-report', data),
-  generateScenario: (data: any) => api.post('/ai/scenario', data),
+  // Generate scenario analysis for a named scenario
+  generateScenario: (baseData: any, scenario: string) =>
+    api.post('/ai/scenario-analysis', { baseData, scenario }),
 };
 
 // Financial Service
