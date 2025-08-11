@@ -1,0 +1,12 @@
+Date,Description,Category,Amount,Type,Account
+2025-03-01,Sales Invoice,Revenue,-5000,income,Main
+2025-03-02,Office Supplies,Expense,-200,expense,Main
+2025-03-03,Client Payment,Revenue,-3000,income,Main
+2025-03-04,Rent,Expense,-1000,expense,Main
+2025-03-05,Loan Repayment,Expense,-500,expense,Main
+2025-03-06,Consulting Fee,Revenue,-2500,income,Main
+2025-03-07,Utilities,Expense,-150,expense,Main
+2025-03-08,Software License,Expense,-300,expense,Main
+2025-03-09,Marketing Services,Revenue,1800,income,Main
+2025-03-10,Insurance,Expense,-400,expense,Main 
+2000-03-10,Insurance,Expense,-400000,expense,Main 
