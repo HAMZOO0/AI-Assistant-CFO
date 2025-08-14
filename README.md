@@ -52,7 +52,7 @@ _Get real-time alerts and AI-driven insights to optimize costs and detect anomal
 
 ### 1. Clone the Repository
 ```bash
-git clone <repository-url>
+git clone https://github.com/HAMZOO0/AI-Assistant-CFO
 cd ai-cfo-assistant
 ```
 
@@ -118,7 +118,7 @@ The frontend will be running on `http://localhost:3000`.
 ## 🤝 Contributing
 
 Contributions are welcome! Please follow these steps:
-1. Fork the repository.
+1. Fork the repository at https://github.com/HAMZOO0/AI-Assistant-CFO
 2. Create a new feature branch (`git checkout -b feature/your-feature`).
 3. Commit your changes (`git commit -m 'Add some feature'`).
 4. Push to the branch (`git push origin feature/your-feature`).
